@@ -1,0 +1,205 @@
+{
+  "info": {
+    "_postman_id": "7b58c812-4e92-4299-8cfb-railway-postman",
+    "name": "Smart Railway Reservation System API",
+    "description": "Comprehensive Postman Collection for Advanced DBMS Railway System covering Authentication, High-Concurrency Bookings, Stored Procedures, Waitlists, and Admin Operations.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:5000/api", "type": "string" },
+    { "key": "token", "value": "", "type": "string" },
+    { "key": "adminToken", "value": "", "type": "string" },
+    { "key": "pnr", "value": "", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "01. Health & Status",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/health"
+          }
+        }
+      ]
+    },
+    {
+      "name": "02. Authentication",
+      "item": [
+        {
+          "name": "Login as User",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json.token) pm.collectionVariables.set('token', json.token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"user1@railway.com\",\n  \"password\": \"User@123\"\n}"
+            },
+            "url": "{{baseUrl}}/auth/login"
+          }
+        },
+        {
+          "name": "Login as Admin",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json.token) pm.collectionVariables.set('adminToken', json.token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@railway.com\",\n  \"password\": \"Admin@123\"\n}"
+            },
+            "url": "{{baseUrl}}/auth/login"
+          }
+        },
+        {
+          "name": "Get Current Profile (Me)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/auth/me"
+          }
+        }
+      ]
+    },
+    {
+      "name": "03. Train Search & Stations",
+      "item": [
+        {
+          "name": "Get All Stations",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/stations"
+          }
+        },
+        {
+          "name": "Search Trains (NDLS to MMCT)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/search?from=NDLS&to=MMCT&date=2026-10-25&class=3A",
+              "host": ["{{baseUrl}}"],
+              "path": ["search"],
+              "query": [
+                { "key": "from", "value": "NDLS" },
+                { "key": "to", "value": "MMCT" },
+                { "key": "date", "value": "2026-10-25" },
+                { "key": "class", "value": "3A" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Seat Map for Schedule",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/schedules/1/seats?class=3A"
+          }
+        }
+      ]
+    },
+    {
+      "name": "04. Bookings & Transactions",
+      "item": [
+        {
+          "name": "Book Ticket (Normal)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json.booking && json.booking.pnr) pm.collectionVariables.set('pnr', json.booking.pnr);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"scheduleId\": 1,\n  \"class\": \"3A\",\n  \"fromStationId\": 1,\n  \"toStationId\": 2,\n  \"passengers\": [\n    {\n      \"name\": \"Rohan Sharma\",\n      \"age\": 29,\n      \"gender\": \"M\"\n    }\n  ],\n  \"paymentMethod\": \"UPI\",\n  \"forcePayFail\": false\n}"
+            },
+            "url": "{{baseUrl}}/bookings"
+          }
+        },
+        {
+          "name": "Book Ticket (Force Payment Failure Rollback)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"scheduleId\": 1,\n  \"class\": \"3A\",\n  \"fromStationId\": 1,\n  \"toStationId\": 2,\n  \"passengers\": [\n    {\n      \"name\": \"Failed Passenger\",\n      \"age\": 25,\n      \"gender\": \"F\"\n    }\n  ],\n  \"paymentMethod\": \"CARD\",\n  \"forcePayFail\": true\n}"
+            },
+            "url": "{{baseUrl}}/bookings"
+          }
+        },
+        {
+          "name": "Get My Bookings",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/bookings/my"
+          }
+        },
+        {
+          "name": "Get PNR Status",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/pnr/{{pnr}}"
+          }
+        },
+        {
+          "name": "Cancel Ticket",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/bookings/{{pnr}}/cancel"
+          }
+        }
+      ]
+    },
+    {
+      "name": "05. Admin Operations",
+      "item": [
+        {
+          "name": "Get Admin KPI Stats",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": "{{baseUrl}}/admin/stats"
+          }
+        }
+      ]
+    }
+  ]
+}
