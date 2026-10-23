@@ -1,0 +1,76 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  test-and-verify:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: smart_railway
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up PostgreSQL Database Schema
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d smart_railway -f db/01_schema.sql
+          psql -h localhost -U postgres -d smart_railway -f db/02_indexes.sql
+          psql -h localhost -U postgres -d smart_railway -f db/03_functions.sql
+          psql -h localhost -U postgres -d smart_railway -f db/04_triggers.sql
+          psql -h localhost -U postgres -d smart_railway -f db/05_views.sql
+          psql -h localhost -U postgres -d smart_railway -f db/06_seed.sql
+          psql -h localhost -U postgres -d smart_railway -f db/07_generate_inventory.sql
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: backend/package.json
+
+      - name: Install Backend Dependencies
+        working-directory: backend
+        run: npm ci
+
+      - name: Run Backend Tests
+        working-directory: backend
+        env:
+          DB_HOST: localhost
+          DB_PORT: 5432
+          DB_NAME: smart_railway
+          DB_USER: postgres
+          DB_PASSWORD: postgres
+          JWT_SECRET: test_secret_key_12345
+          NODE_ENV: test
+        run: npm test
+
+      - name: Run Concurrency Demo Script
+        working-directory: .
+        env:
+          DB_HOST: localhost
+          DB_PORT: 5432
+          DB_NAME: smart_railway
+          DB_USER: postgres
+          DB_PASSWORD: postgres
+          JWT_SECRET: test_secret_key_12345
+        run: node scripts/run_concurrency_demo.js
