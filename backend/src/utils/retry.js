@@ -19,7 +19,7 @@ const RETRYABLE_SQL_STATES = new Set([
  * @param {number} baseDelayMs - Base delay in milliseconds (default 50ms).
  * @returns {Promise<any>} - Resolves with the operation's return value.
  */
-async function withRetry(operation, maxRetries = 5, baseDelayMs = 50) {
+async function withRetry(operation, maxRetries = 12, baseDelayMs = 40) {
   let attempt = 0;
 
   while (true) {
@@ -31,7 +31,7 @@ async function withRetry(operation, maxRetries = 5, baseDelayMs = 50) {
 
       if (isRetryable && attempt <= maxRetries) {
         // Calculate exponential backoff with full random jitter
-        const maxDelay = baseDelayMs * Math.pow(2, attempt);
+        const maxDelay = Math.min(baseDelayMs * Math.pow(1.8, attempt), 1000);
         const delay = Math.floor(Math.random() * maxDelay);
 
         console.warn(
@@ -40,6 +40,7 @@ async function withRetry(operation, maxRetries = 5, baseDelayMs = 50) {
 
         await new Promise((resolve) => setTimeout(resolve, delay));
       } else {
+        console.error(`[Concurrency Error] Aborted after attempt ${attempt}/${maxRetries}: code=${error?.code}, message=${error?.message}`);
         // Rethrow non-retryable error or exceeded maximum retries
         throw error;
       }

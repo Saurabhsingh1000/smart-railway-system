@@ -13,9 +13,9 @@ const pool = new Pool({
   database: process.env.DB_NAME || 'smart_railway',
   user: process.env.DB_USER || 'postgres',
   password: process.env.DB_PASSWORD || 'postgres',
-  max: 30, // Support concurrent connections for concurrency stress testing
+  max: 60, // Support concurrent connections for 50+ concurrency stress testing
   idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 5000,
+  connectionTimeoutMillis: 30000,
 });
 
 pool.on('error', (err) => {

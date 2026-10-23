@@ -109,12 +109,8 @@ BEGIN
         RETURN 'FAILED';
     END IF;
 
-    -- 95% success rate simulation for non-forced payments
-    IF random() < 0.95 THEN
-        RETURN 'SUCCESS';
-    ELSE
-        RETURN 'FAILED';
-    END IF;
+    -- Successful payment unless explicitly instructed to fail
+    RETURN 'SUCCESS';
 END;
 $$;
 
@@ -500,6 +496,11 @@ BEGIN
     VALUES (p_pnr, v_refund_amt, 'REFUND', 'REFUNDED', CURRENT_TIMESTAMP);
 
     -- 6. Free up allocated seats (or remove from waiting list)
+    -- Mark passengers CANCELLED first so freed seats can immediately be reallocated to waitlist
+    UPDATE passengers
+    SET status = 'CANCELLED'
+    WHERE pnr = p_pnr;
+
     IF v_booking.status = 'CONFIRMED' THEN
         FOR v_passenger IN
             SELECT seat_id
@@ -527,11 +528,6 @@ BEGIN
               AND position > v_passenger.position;
         END LOOP;
     END IF;
-
-    -- Mark passengers CANCELLED
-    UPDATE passengers
-    SET status = 'CANCELLED'
-    WHERE pnr = p_pnr;
 
     RETURN jsonb_build_object(
         'success', true,
