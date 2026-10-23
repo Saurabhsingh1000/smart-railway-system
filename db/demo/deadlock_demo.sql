@@ -1,0 +1,67 @@
+-- ============================================================================
+-- DEMO 3: DEADLOCK INDUCTION & MATHEMATICAL PREVENTION
+-- ============================================================================
+-- PURPOSE:
+-- 1. Intentionally create a circular wait condition (Deadlock) in PostgreSQL.
+-- 2. Observe PostgreSQL deadlock detection (SQLSTATE 40P01).
+-- 3. Show how ORDER BY seat_id in our book_ticket procedure prevents it.
+-- ============================================================================
+
+-- Setup test seats
+UPDATE seat_inventory SET status = 'FREE' WHERE schedule_id = 1 AND seat_id IN (10, 20);
+
+-- ----------------------------------------------------------------------------
+-- PART A: HOW A DEADLOCK OCCURS (Opposite Lock Ordering)
+-- ----------------------------------------------------------------------------
+--
+-- Session 1 (Booking 2 seats: Seat 10 then Seat 20):
+--   BEGIN;
+--   SELECT * FROM seat_inventory WHERE schedule_id = 1 AND seat_id = 10 FOR UPDATE;
+--   -- (Acquires lock on Seat 10)
+--
+-- Session 2 (Booking 2 seats in reverse order: Seat 20 then Seat 10):
+--   BEGIN;
+--   SELECT * FROM seat_inventory WHERE schedule_id = 1 AND seat_id = 20 FOR UPDATE;
+--   -- (Acquires lock on Seat 20)
+--
+-- Session 1 attempts to lock Seat 20:
+--   SELECT * FROM seat_inventory WHERE schedule_id = 1 AND seat_id = 20 FOR UPDATE;
+--   -- (Session 1 BLOCKS, waiting for Session 2 to release Seat 20)
+--
+-- Session 2 attempts to lock Seat 10:
+--   SELECT * FROM seat_inventory WHERE schedule_id = 1 AND seat_id = 10 FOR UPDATE;
+--   -- (Session 2 BLOCKS, waiting for Session 1 to release Seat 10)
+--
+-- DEADLOCK CYCLE FORMED:
+-- Session 1 waits on Session 2; Session 2 waits on Session 1!
+--
+-- POSTGRESQL RESPONSE:
+-- After deadlock_timeout (default 1s), PostgreSQL detects the cycle in the lock graph:
+-- ERROR: deadlock detected
+-- DETAIL: Process 12345 waits for ExclusiveLock on tuple (0,20) of relation "seat_inventory";
+--         blocked by process 67890.
+--         Process 67890 waits for ExclusiveLock on tuple (0,10) of relation "seat_inventory";
+--         blocked by process 12345.
+-- HINT: See server log for query details.
+-- SQLSTATE: 40P01
+
+-- ----------------------------------------------------------------------------
+-- PART B: HOW OUR ARCHITECTURE PREVENTS DEADLOCKS
+-- ----------------------------------------------------------------------------
+--
+-- In db/03_functions.sql (book_ticket procedure):
+--
+--   SELECT ARRAY_AGG(seat_id ORDER BY seat_id)
+--   FROM (
+--       SELECT si.seat_id
+--       FROM seat_inventory si
+--       ...
+--       ORDER BY si.seat_id   <--- GLOBAL CANONICAL ORDER
+--       FOR UPDATE
+--   ) sub;
+--
+-- Mathematical Guarantee (Coffman's Conditions):
+-- By imposing a strict total order (<) on resource acquisition (seat_id),
+-- a circular wait graph CANNOT form. If T1 and T2 both request {10, 20},
+-- both will request 10 FIRST. The winner acquires 10 and then 20,
+-- while the loser waits on 10 without holding any resource needed by the winner!

@@ -1,0 +1,47 @@
+-- ============================================================================
+-- DEMO 2: WITHOUT LOCK DEMO — Proving the Double Booking Flaw (Lost Update)
+-- ============================================================================
+-- PURPOSE:
+-- Demonstrates the catastrophic double-allocation bug that occurs if the 
+-- application or database omits row-level locking (FOR UPDATE) under default
+-- Read Committed isolation.
+-- ============================================================================
+
+-- Setup clean test condition: Ensure Seat 2 is FREE
+UPDATE seat_inventory SET status = 'FREE' WHERE schedule_id = 1 AND seat_id = 2;
+
+-- ----------------------------------------------------------------------------
+-- CHRONOLOGICAL EXECUTION SCENARIO:
+-- ----------------------------------------------------------------------------
+--
+-- Time T1: SESSION 1 starts transaction
+--   BEGIN;
+--   SELECT status FROM seat_inventory WHERE schedule_id = 1 AND seat_id = 2;
+--   --> Returns: 'FREE' (Session 1 decides seat is available for Passenger A)
+--
+-- Time T2: SESSION 2 starts transaction concurrently
+--   BEGIN;
+--   SELECT status FROM seat_inventory WHERE schedule_id = 1 AND seat_id = 2;
+--   --> Returns: 'FREE'! (Session 2 also sees it as available for Passenger B!)
+--   --> [BUG MANIFESTS HERE: Without FOR UPDATE, neither session blocks!]
+--
+-- Time T3: SESSION 1 commits its booking
+--   UPDATE seat_inventory SET status = 'BOOKED' WHERE schedule_id = 1 AND seat_id = 2;
+--   INSERT INTO passengers (pnr, name, age, gender, seat_id, status) ... (Passenger A)
+--   COMMIT;
+--
+-- Time T4: SESSION 2 overwrites with its booking!
+--   UPDATE seat_inventory SET status = 'BOOKED' WHERE schedule_id = 1 AND seat_id = 2;
+--   INSERT INTO passengers (pnr, name, age, gender, seat_id, status) ... (Passenger B)
+--   COMMIT;
+--
+-- RESULT:
+-- Both Passenger A and Passenger B have tickets with confirmed Seat 2 on the same train!
+-- 
+-- HOW OUR SYSTEM SOLVES THIS:
+-- 1. Pessimistic: `SELECT ... FOR UPDATE` forces Session 2 to wait until Session 1 finishes,
+--    at which point Session 2 evaluates the new 'BOOKED' status and routes to WL.
+-- 2. Database Trigger: `trg_prevent_double_assign` throws an EXCEPTION if two
+--    passengers ever receive the same seat_id on the same schedule run.
+-- 3. Optimistic: `UPDATE seat_inventory SET status = 'BOOKED' WHERE seat_id = $1 AND version = $version`
+--    causes Session 2 to update 0 rows and retry.
