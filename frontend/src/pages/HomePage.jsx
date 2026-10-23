@@ -49,7 +49,7 @@ export default function HomePage() {
     try {
       const res = await api.searchTrains(fromStation, toStation, journeyDate, travelClass);
       if (res.success) {
-        setTrains(res.results || []);
+        setTrains(res.trains || res.results || []);
       }
     } catch (err) {
       addToast(err.message || 'Train search failed', 'error');

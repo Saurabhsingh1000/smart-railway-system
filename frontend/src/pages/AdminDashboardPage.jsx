@@ -23,8 +23,9 @@ export default function AdminDashboardPage() {
     setLoading(true);
     try {
       const res = await api.getAdminStats();
-      if (res.success && res.data) {
-        setStats(res.data);
+      const statsData = res.stats || res.data;
+      if (res.success && statsData) {
+        setStats(statsData);
       }
     } catch (err) {
       addToast(err.message || 'Error fetching admin metrics', 'error');

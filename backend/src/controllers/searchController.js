@@ -24,6 +24,7 @@ async function searchTrains(req, res, next) {
       count: trains.length,
       searchParams: { from, to, date, class: travelClass || 'ALL' },
       trains,
+      results: trains,
     });
   } catch (err) {
     next(err);

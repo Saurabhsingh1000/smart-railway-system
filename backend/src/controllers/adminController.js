@@ -10,7 +10,7 @@ const bookingService = require('../services/bookingService');
 async function getStats(req, res, next) {
   try {
     const stats = await bookingService.getAdminStats();
-    res.json({ success: true, stats });
+    res.json({ success: true, stats, data: stats });
   } catch (err) {
     next(err);
   }
