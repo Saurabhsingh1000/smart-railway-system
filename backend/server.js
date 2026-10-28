@@ -23,13 +23,30 @@ const adminRoutes = require('./src/routes/adminRoutes');
 const { getPNRStatus } = require('./src/controllers/bookingsController');
 const errorHandler = require('./src/middleware/errorHandler');
 
+const path = require('path');
+const fs = require('fs');
+
 const app = express();
 const PORT = process.env.PORT || 5000;
 
 // Security & Parsing Middleware
-app.use(helmet());
+app.use(helmet({
+  contentSecurityPolicy: false,
+  crossOriginEmbedderPolicy: false,
+}));
+
+// CORS Configuration
+const allowedOrigins = process.env.CLIENT_URL 
+  ? process.env.CLIENT_URL.split(',').map(u => u.trim()) 
+  : ['http://localhost:5173'];
+
 app.use(cors({
-  origin: process.env.CLIENT_URL || 'http://localhost:5173',
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes('*') || allowedOrigins.includes(origin) || process.env.NODE_ENV !== 'production') {
+      return callback(null, true);
+    }
+    return callback(null, true);
+  },
   credentials: true,
 }));
 app.use(express.json());
@@ -84,8 +101,18 @@ app.use('/api/bookings', bookingsRoutes);
 app.get('/api/pnr/:pnr', getPNRStatus);
 app.use('/api/admin', adminRoutes);
 
-// 404 Handler
-app.use((req, res) => {
+// Serve static frontend build if present
+const frontendDist = path.join(__dirname, '../frontend/dist');
+if (fs.existsSync(frontendDist)) {
+  app.use(express.static(frontendDist));
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api')) return next();
+    res.sendFile(path.join(frontendDist, 'index.html'));
+  });
+}
+
+// 404 Handler for API endpoints
+app.use('/api', (req, res) => {
   res.status(404).json({
     success: false,
     error: `Endpoint not found: ${req.method} ${req.originalUrl}`,
